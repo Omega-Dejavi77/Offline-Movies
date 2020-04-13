@@ -1,15 +1,23 @@
 package com.example.offlinemovies.data;
 
+import androidx.annotation.NonNull;
+import androidx.lifecycle.LiveData;
 import androidx.room.Room;
-import androidx.room.RoomDatabase;
 
 import com.example.offlinemovies.app.MyApp;
 import com.example.offlinemovies.data.local.MovieRoomDatabase;
 import com.example.offlinemovies.data.local.dao.MovieDAO;
+import com.example.offlinemovies.data.local.entity.MovieEntity;
+import com.example.offlinemovies.data.model.ResponseMovie;
+import com.example.offlinemovies.data.network.NetworkBoundResource;
+import com.example.offlinemovies.data.network.Resource;
 import com.example.offlinemovies.data.remote.ApiConstants;
 import com.example.offlinemovies.data.remote.MovieApiService;
 
+import java.util.List;
+
 import okhttp3.OkHttpClient;
+import retrofit2.Call;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
@@ -28,11 +36,36 @@ public class MovieRepository {
         OkHttpClient client = okHttpClient.build();
 
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(ApiConstants.BASE_URL + ApiConstants.API_KEY)
+                .baseUrl(ApiConstants.BASE_URL)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
 
         movieApiService = retrofit.create(MovieApiService.class);
+    }
+
+    public LiveData<Resource<List<MovieEntity>>> getMovies() {
+        //Tipo que devuelve Room (BD local), Tipo que devuelve la API con Retrofit
+        return new NetworkBoundResource<List<MovieEntity>, ResponseMovie>() {
+            @Override
+            protected void saveCallResult(@NonNull ResponseMovie item) {
+                //guardar datos de la API a Room (local DB)
+                movieDAO.saveMovies(item.getResults());
+            }
+
+            @NonNull
+            @Override
+            protected LiveData<List<MovieEntity>> loadFromDb() {
+                //Datos que dispongamos en Room
+                return movieDAO.loadMovies();
+            }
+
+            @NonNull
+            @Override
+            protected Call<ResponseMovie> createCall() {
+                //API externa
+                return movieApiService.loadMovies();
+            }
+        }.getAsLiveData();
     }
 }
